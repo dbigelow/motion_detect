@@ -26,7 +26,7 @@ This project uses OpenCV's [background subtraction module](http://docs.opencv.or
 Running "make" in the motion_detect directory will create an executable file in the motion_detect/bin directory. Simply run this executable through a terminal or by double-clicking in the GUI (no paramaters are accepted by the program at this time).
 
 ## Future Work
-- [] Add ability to record video whenever motion is detected.
-- [] Add ability to monitor all webcams attached to the computer.
-  - [] Prompt user to select webcams to monitor on startup.
-- [] Add ability to interface with IP webcams.
+- [ ] Add ability to record video whenever motion is detected.
+- [ ] Add ability to monitor all webcams attached to the computer.
+  - [ ] Prompt user to select webcams to monitor on startup.
+- [ ] Add ability to interface with IP webcams.
