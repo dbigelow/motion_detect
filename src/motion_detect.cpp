@@ -4,41 +4,76 @@
 
 using namespace cv;
 
+static int MOVEMENT_THRESHOLD = 300;
+
+void reduceNoise(Mat, Mat);
+int findIndexOfBiggestComponent(Mat);
+
 int main(int argc, char * argv[]) {
-	VideoCapture cap(0);
-	if(!cap.isOpened()) {
-		std::cout << "Could not read from camera" << std::endl;
-		return 1;
-	}
+    VideoCapture cameraFeed(0);
+    if (!cameraFeed.isOpened()) {
+        std::cout << "Could not read from camera" << std::endl;
+        return 1;
+    }
 
-	namedWindow("Camera", 1);
-	namedWindow("Mask", 1);
-	namedWindow("Background", 1);
+    namedWindow("Camera", CV_WINDOW_AUTOSIZE);
+    namedWindow("Mask", CV_WINDOW_AUTOSIZE);
 
-	Mat frame;
-	Mat fgMaskMOG2;
-	Mat background;
+    Mat rawCameraFrame;
+    Mat backgroundSubtractMask;
+    Mat componentStatistics;
+    Mat componentCentroids;
 
-	Ptr<BackgroundSubtractor> pMOG2;
-	pMOG2 = createBackgroundSubtractorMOG2();
-  	Mat element = getStructuringElement( MORPH_ELLIPSE,
-                       Size(2, 2),
-                       Point(0, 0));
-	while(waitKey(20) < 0) {
-		cap >> frame;
+    Ptr<BackgroundSubtractor> backgroundSubtractor = createBackgroundSubtractorMOG2();
+    Mat erosionMask = getStructuringElement(MORPH_ELLIPSE, Size(4, 4), Point(0, 0));
 
-		pMOG2->apply(frame, fgMaskMOG2);
-		pMOG2->getBackgroundImage(background);
-		
-		erode(fgMaskMOG2, fgMaskMOG2, element);
-		erode(fgMaskMOG2, fgMaskMOG2, element);
-		dilate(fgMaskMOG2, fgMaskMOG2, element);
-		dilate(fgMaskMOG2, fgMaskMOG2, element);
+    while (waitKey(33) < 0) {
+        cameraFeed >> rawCameraFrame;
 
+        backgroundSubtractor->apply(rawCameraFrame, backgroundSubtractMask);
 
-		imshow("Camera", frame);
-		imshow("Mask", fgMaskMOG2);
-		imshow("Background", background);
-	}
-	return 0;
+        reduceNoise(backgroundSubtractMask, erosionMask);
+
+        Mat maskConnected(backgroundSubtractMask.size(), CV_32S);
+        int components = connectedComponentsWithStats(backgroundSubtractMask, maskConnected, componentStatistics,
+                componentCentroids);
+
+        int indexOfBiggestComponent = findIndexOfBiggestComponent(componentStatistics);
+
+        if (componentStatistics.at<int>(indexOfBiggestComponent, CC_STAT_AREA) > MOVEMENT_THRESHOLD) {
+            Point upperLeftCorner(componentStatistics.at<int>(indexOfBiggestComponent, CC_STAT_LEFT),
+                    componentStatistics.at<int>(indexOfBiggestComponent, CC_STAT_TOP));
+
+            Point lowerRightCorner(
+                    componentStatistics.at<int>(indexOfBiggestComponent, CC_STAT_LEFT)
+                            + componentStatistics.at<int>(indexOfBiggestComponent, CC_STAT_WIDTH),
+                    componentStatistics.at<int>(indexOfBiggestComponent, CC_STAT_TOP)
+                            + componentStatistics.at<int>(indexOfBiggestComponent, CC_STAT_HEIGHT));
+
+            cv::rectangle(rawCameraFrame, upperLeftCorner, lowerRightCorner, Scalar(0, 0, 255));
+        }
+
+        imshow("Camera", rawCameraFrame);
+        imshow("Mask", backgroundSubtractMask);
+    }
+    return 0;
+}
+
+void reduceNoise(Mat image, Mat element) {
+    dilate(image, image, element);
+    erode(image, image, element);
+}
+
+int findIndexOfBiggestComponent(Mat components) {
+    int maxComponentSize = 0;
+    int indexOfMaxComponent = 0;
+    int numberOfComponents = components.size().height;
+
+    for (int i = 1; i < numberOfComponents; i++) {
+        if (components.at<int>(i, CC_STAT_AREA) > maxComponentSize) {
+            indexOfMaxComponent = i;
+            maxComponentSize = components.at<int>(i, CC_STAT_AREA);
+        }
+    }
+    return indexOfMaxComponent;
 }
