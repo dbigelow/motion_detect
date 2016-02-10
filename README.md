@@ -23,7 +23,7 @@ This project uses OpenCV's [background subtraction module](http://docs.opencv.or
   - `make`
 
 ### To Run:
-Running "make" in the motion_detect directory will create an executable file in the motion_detect/bin directory. Simply run this executable through a terminal or by double-clicking in the GUI (no paramaters are accepted by the program at this time).
+Running "make" in the motion_detect directory will create an executable file in the motion_detect/bin directory. Simply run this executable through a terminal or by double-clicking in the GUI.
 
 ## Future Work
 - [ ] Add ability to record video whenever motion is detected.
