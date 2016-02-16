@@ -37,7 +37,6 @@ int main(int argc, char * argv[]) {
     int width = cameraFeed.get(CAP_PROP_FRAME_WIDTH);
     int height = cameraFeed.get(CAP_PROP_FRAME_HEIGHT);
     VideoWriter videoWriter;
-    int timeToRecord = 60;
 
     while (waitKey(33) < 0) {
         cameraFeed >> rawCameraFrame;
