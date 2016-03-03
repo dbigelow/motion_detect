@@ -8,9 +8,13 @@ using namespace cv;
 
 static int MOVEMENT_THRESHOLD = 9000;
 static int RECORDING_LENGTH = 30;
+static int FRAMES_PER_SECOND = 30;
 
-void reduceNoise(Mat, Mat);
-int findIndexOfBiggestComponent(Mat);
+void reduceNoise(Mat image, Mat erosionMask);
+int findIndexOfBiggestComponent(Mat components);
+char * getNewVideoName();
+Point getUpperLeftCorner(Mat componentStatistics, int index);
+Point getLowerRightCorner(Mat componentStatistics, int index);
 
 int main(int argc, char * argv[]) {
     VideoCapture cameraFeed(0);
@@ -31,61 +35,45 @@ int main(int argc, char * argv[]) {
     Mat erosionMask = getStructuringElement(MORPH_ELLIPSE, Size(4, 4), Point(0, 0));
 
     clock_t startTime = clock();
-    bool record = false;
-    int videoCount = 0;
+    bool recording = false;
 
     int width = cameraFeed.get(CAP_PROP_FRAME_WIDTH);
     int height = cameraFeed.get(CAP_PROP_FRAME_HEIGHT);
     VideoWriter videoWriter;
 
-    while (waitKey(33) < 0) {
+    while (waitKey(1000 / FRAMES_PER_SECOND) < 0) {
         cameraFeed >> rawCameraFrame;
 
         backgroundSubtractor->apply(rawCameraFrame, backgroundSubtractMask);
 
         reduceNoise(backgroundSubtractMask, erosionMask);
 
-
-        Mat maskConnected(backgroundSubtractMask.size(), CV_32S);
-        int components = connectedComponentsWithStats(backgroundSubtractMask, maskConnected, componentStatistics,
+        Mat componentImage(backgroundSubtractMask.size(), CV_32S);
+        int components = connectedComponentsWithStats(backgroundSubtractMask, componentImage, componentStatistics,
                 componentCentroids);
 
         int indexOfBiggestComponent = findIndexOfBiggestComponent(componentStatistics);
+        int areaOfBiggestComponent = componentStatistics.at<int>(indexOfBiggestComponent, CC_STAT_AREA);
 
-        if (componentStatistics.at<int>(indexOfBiggestComponent, CC_STAT_AREA) > MOVEMENT_THRESHOLD) {
-            Point upperLeftCorner(componentStatistics.at<int>(indexOfBiggestComponent, CC_STAT_LEFT),
-                    componentStatistics.at<int>(indexOfBiggestComponent, CC_STAT_TOP));
-
-            Point lowerRightCorner(
-                    componentStatistics.at<int>(indexOfBiggestComponent, CC_STAT_LEFT)
-                            + componentStatistics.at<int>(indexOfBiggestComponent, CC_STAT_WIDTH),
-                    componentStatistics.at<int>(indexOfBiggestComponent, CC_STAT_TOP)
-                            + componentStatistics.at<int>(indexOfBiggestComponent, CC_STAT_HEIGHT));
+        if (areaOfBiggestComponent > MOVEMENT_THRESHOLD) {
+            Point upperLeftCorner = getUpperLeftCorner(componentStatistics, indexOfBiggestComponent);
+            Point lowerRightCorner = getLowerRightCorner(componentStatistics, indexOfBiggestComponent);
 
             cv::rectangle(rawCameraFrame, upperLeftCorner, lowerRightCorner, Scalar(0, 0, 255));
+
             startTime = clock();
-            if (!record) {
-                time_t rawtime;
-                struct tm * timeinfo;
-                char buffer[80];
-
-                time(&rawtime);
-                timeinfo = localtime(&rawtime);
-
-                strftime(buffer, 80, "%Y-%m-%d-%I-%M-%S", timeinfo);
-                char videoName[50];
-                sprintf(videoName, "recording_%s.avi", buffer);
-                videoCount++;
-                videoWriter.open(videoName, VideoWriter::fourcc('M', 'J', 'P', 'G'), 30, Size(width, height));
-
+            if (!recording) {
+                char * videoName = getNewVideoName();
+                videoWriter.open(videoName, VideoWriter::fourcc('M', 'J', 'P', 'G'), FRAMES_PER_SECOND,
+                        Size(width, height));
             }
-            record = true;
+            recording = true;
         }
-        if (record && (clock() - startTime) / CLOCKS_PER_SEC < RECORDING_LENGTH) {
+        if (recording && (clock() - startTime) / CLOCKS_PER_SEC < RECORDING_LENGTH) {
             videoWriter.write(rawCameraFrame);
 
-        } else if (record && (clock() - startTime) / CLOCKS_PER_SEC > RECORDING_LENGTH) {
-            record = false;
+        } else if (recording && (clock() - startTime) / CLOCKS_PER_SEC > RECORDING_LENGTH) {
+            recording = false;
             videoWriter.release();
         }
 
@@ -95,9 +83,9 @@ int main(int argc, char * argv[]) {
     return 0;
 }
 
-void reduceNoise(Mat image, Mat element) {
-    dilate(image, image, element);
-    erode(image, image, element);
+void reduceNoise(Mat image, Mat erosionMask) {
+    dilate(image, image, erosionMask);
+    erode(image, image, erosionMask);
 }
 
 int findIndexOfBiggestComponent(Mat components) {
@@ -112,4 +100,28 @@ int findIndexOfBiggestComponent(Mat components) {
         }
     }
     return indexOfMaxComponent;
+}
+
+char * getNewVideoName() {
+    time_t rawtime;
+    struct tm * timeinfo;
+    char buffer[80];
+    time(&rawtime);
+    timeinfo = localtime(&rawtime);
+    strftime(buffer, 80, "%Y-%m-%d-%I-%M-%S", timeinfo);
+    char * videoName = new char[50];
+    sprintf(videoName, "recording_%s.avi", buffer);
+    return videoName;
+}
+
+Point getUpperLeftCorner(Mat componentStatistics, int index) {
+    Point upperLeft(componentStatistics.at<int>(index, CC_STAT_LEFT), componentStatistics.at<int>(index, CC_STAT_TOP));
+    return upperLeft;
+}
+
+Point getLowerRightCorner(Mat componentStatistics, int index) {
+    Point lowerRight(
+            componentStatistics.at<int>(index, CC_STAT_LEFT) + componentStatistics.at<int>(index, CC_STAT_WIDTH),
+            componentStatistics.at<int>(index, CC_STAT_TOP) + componentStatistics.at<int>(index, CC_STAT_HEIGHT));
+    return lowerRight;
 }
